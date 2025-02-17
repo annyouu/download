@@ -10,11 +10,13 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var mu sync.Mutex
+
 func downloadRange(ctx context.Context, url string, start, end int64, wg *sync.WaitGroup, outFile *os.File, g *errgroup.Group) {
 	defer wg.Done()
 
 	// HTTPリクエスト作成
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx,"GET", url, nil)
 	if err != nil {
 		g.Go(func() error { return err })
 		return
@@ -29,7 +31,11 @@ func downloadRange(ctx context.Context, url string, start, end int64, wg *sync.W
 	}
 	defer resp.Body.Close()
 
-	// 書き込み
+	// 書き込み時にロック
+	mu.Lock()
+	defer mu.Unlock()
+
+	// ファイルの適切な位置に書き込みするように移動
 	_, err = outFile.Seek(start, io.SeekStart)
 	if err != nil {
 		g.Go(func() error { return err })
@@ -82,7 +88,7 @@ func main() {
 		fmt.Println("ダウンロード中にエラー:", err)
 		return
 	}
-	
+
 	wg.Wait()
 	fmt.Println("ダウンロード完了！")
 }
